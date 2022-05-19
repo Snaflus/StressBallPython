@@ -57,7 +57,8 @@ errLCD = [
 
 #create class with attribute to enable/support multi threading
 class lcdManager():
-  lcdShow = True
+  lcdShowGood = False
+  lcdShowBad = False
         
   def startThread(self):
     threadLCD = threading.Thread(target=run)
@@ -66,7 +67,19 @@ class lcdManager():
 def run():
   alternate = True
   while True:
-    if threadLCD.lcdShow == True:
+    if threadLCD.lcdShowGood == True:
+      sense.set_rotation(0)
+      alternate = True
+      sense.set_pixels(sentLCD)
+      time.sleep(2)
+      threadLCD.lcdShowGood = False
+
+    if threadLCD.lcdShowBad == True:
+      sense.set_rotation(0)
+      alternate = True
+      sense.set_pixels(errLCD)
+      
+    if (threadLCD.lcdShowGood == False) and (threadLCD.lcdShowBad == False):
       if alternate == True:
         sense.set_rotation(0)
         sense.set_pixels(idleLCD)
@@ -76,49 +89,68 @@ def run():
         sense.set_pixels(idleLCD)
         alternate = True
       time.sleep(0.75)
-    elif threadLCD.lcdShow == False:
-      sense.set_rotation(0)
-      alternate = True
-      sense.set_pixels(sentLCD)
-      time.sleep(2)
-      threadLCD.lcdShow = True
+
+
+def getAccel():
+  #get data from sensor and bind to xyz
+  acceleration = sense.get_accelerometer_raw()
+  x = acceleration['x']
+  y = acceleration['y']
+  z = acceleration['z']
+
+  #abs converts negative values to positive
+  x=abs(x)
+  y=abs(y)
+  z=abs(z)
+    
+  #get total acceleration
+  return math.sqrt(x**2 + y**2 + z**2)
+
+def sendData(accel):
+  threadLCD.lcdShowGood = True
+  #format string to datetime and manipulates format for C# library
+  dateString = str(datetime.datetime.now())
+  dateString = dateString.replace(" ","T")
+      
+  dataJSON = {
+    "id":0,
+    "speed":accel,
+    "dateTimeNow": dateString
+  }
+      
+  #convert python dictionary object to JSON for the 'dumb' UDP server
+  dataPacket = json.dumps(dataJSON)
+      
+  #sends packet to UDP server and prints it in internal log
+  socket.sendto(bytes(str(dataPacket), "UTF-8"), ('<broadcast>', BROADCAST_TO_PORT))
+  print(str(dataPacket))
+  time.sleep(2)
 
 def mainLoop():
+  lastTime=0
   while True:
-    #get data from sensor and bind to xyz
-    acceleration = sense.get_accelerometer_raw()
-    x = acceleration['x']
-    y = acceleration['y']
-    z = acceleration['z']
-
-    #abs converts negative values to positive
-    x=abs(x)
-    y=abs(y)
-    z=abs(z)
-    
-    #get total acceleration
-    accel = math.sqrt(x**2 + y**2 + z**2)
+    threadLCD.lcdShowBad = False
+    accel = getAccel()
     
     if accel > 3:
-      threadLCD.lcdShow = False
+      maxReached=0
+      print("Throw registered")
+      time.sleep(3)
+      while maxReached < 10:
+        print("Ball flying")
+        accel = getAccel()
+        threadLCD.lcdShowBad = True
+        if accel > 3:
+          #use accel deltas
+          print("Data should send")
+          sendData(accel)
+          threadLCD.lcdShowBad = False
+          maxReached=2000 #kill while loop
+        if time.time() > lastTime+1:
+          maxReached = maxReached+1
+          lastTime = time.time()
       
-      #format string to datetime and manipulates format for C# library
-      dateString = str(datetime.datetime.now())
-      dateString = dateString.replace(" ","T")
-      
-      dataJSON = {
-        "id":0,
-        "speed":accel,
-        "dateTimeNow": dateString
-      }
-      
-      #convert python dictionary object to JSON for the 'dumb' UDP server
-      dataPacket = json.dumps(dataJSON)
-      
-      #sends packet to UDP server and prints it in internal log
-      socket.sendto(bytes(str(dataPacket), "UTF-8"), ('<broadcast>', BROADCAST_TO_PORT))
-      print(str(dataPacket))
-      time.sleep(2)
+
 
 #initialize object for class lcdManager
 threadLCD = lcdManager()
