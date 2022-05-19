@@ -55,17 +55,16 @@ errLCD = [
     n, n, n, n, n, n, n, n
 ]
 
-lcdShow = True
-alternate = True
-
 while True:
+  lcdShow = True
+  alternate = True
   print(alternate)
   if lcdShow == True:
     if alternate == True:
       sense.set_rotation(0)
       sense.set_pixels(idleLCD)
       alternate = False
-    elif alternate == False:
+    else:
       sense.set_rotation(90)
       sense.set_pixels(idleLCD)
       alternate = True
