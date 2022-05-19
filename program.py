@@ -6,6 +6,7 @@ import threading
 from socket import *
 import datetime
 import math
+import json
 
 sense = SenseHat()
 sense.low_light = True
@@ -54,14 +55,9 @@ errLCD = [
     n, n, n, n, n, n, n, n
 ]
 
+#create class with attribute to enable/support multi threading
 class lcdManager():
   lcdShow = True
-  def start(self):
-    lcdShow = True
-    
-  def stop(self):
-    lcdShow = False
-    #prøv print
         
   def startThread(self):
     threadLCD = threading.Thread(target=run)
@@ -89,8 +85,8 @@ def run():
 
 def mainLoop():
   while True:
+    #get data from sensor and bind to xyz
     acceleration = sense.get_accelerometer_raw()
-
     x = acceleration['x']
     y = acceleration['y']
     z = acceleration['z']
@@ -104,20 +100,22 @@ def mainLoop():
     accel = math.sqrt(x**2 + y**2 + z**2)
     
     if accel > 3:
-      #threadLCD.stop()
       threadLCD.lcdShow = False
       dataJSON = {
         "id":0,
-        "speed":accel
+        "speed":accel,
         "dateTimeNow": str(datetime.datetime.now())
       }
-      socket.sendto(bytes(str(dataJSON), "UTF-8"), ('<broadcast>', BROADCAST_TO_PORT))
-      print(str(dataJSON))
-      time.sleep(3)
-      #threadLCD.start()
-      #threadLCD.lcdshow = True
+      #convert python dictionary object to JSON for the 'dumb' UDP server
+      dataPacket = json.dumps(dataJSON)
+      
+      #sends packet to UDP server and prints it in internal log
+      socket.sendto(bytes(str(dataPacket), "UTF-8"), ('<broadcast>', BROADCAST_TO_PORT))
+      print(str(dataPacket))
+      time.sleep(2)
 
-
+#initialize object for class lcdManager
 threadLCD = lcdManager()
+#starts the object
 threadLCD.startThread()
 mainLoop()
