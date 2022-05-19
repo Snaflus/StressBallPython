@@ -55,67 +55,50 @@ errLCD = [
     n, n, n, n, n, n, n, n
 ]
 
-#create class with attribute to enable/support multi threading
-class lcdManager():
-  lcdShow = True
-        
-  def startThread(self):
-    threadLCD = threading.Thread(target=run)
-    threadLCD.start()
+lcdShow = True
+alternate = True
 
-def run():
-  alternate = True
-  while True:
-    if threadLCD.lcdShow == True:
-      if alternate == True:
-        sense.set_rotation(0)
-        sense.set_pixels(idleLCD)
-        alternate = False
-      else:
-        sense.set_rotation(90)
-        sense.set_pixels(idleLCD)
-        alternate = True
-      time.sleep(0.75)
-    elif threadLCD.lcdShow == False:
+while True:
+  print(alternate)
+  if lcdShow == True:
+    if alternate == True:
       sense.set_rotation(0)
+      sense.set_pixels(idleLCD)
+      alternate = False
+    elif alternate == False:
+      sense.set_rotation(90)
+      sense.set_pixels(idleLCD)
       alternate = True
-      sense.set_pixels(sentLCD)
-      time.sleep(2)
-      threadLCD.lcdShow = True
-
-def mainLoop():
-  while True:
-    #get data from sensor and bind to xyz
-    acceleration = sense.get_accelerometer_raw()
-    x = acceleration['x']
-    y = acceleration['y']
-    z = acceleration['z']
-
-    #abs converts negative values to positive
-    x=abs(x)
-    y=abs(y)
-    z=abs(z)
+    time.sleep(0.75)
+  elif lcdShow == False:
+    sense.set_rotation(0)
+    alternate = True
+    sense.set_pixels(sentLCD)
+    time.sleep(2)
+    lcdShow = True
     
-    #get total acceleration
-    accel = math.sqrt(x**2 + y**2 + z**2)
-    
-    if accel > 3:
-      threadLCD.lcdShow = False
-      dataJSON = {
-        "id":0,
-        "speed":accel,
-        "dateTimeNow": str(datetime.datetime.now())
-      }
-      #convert python dictionary object to JSON for the 'dumb' UDP server
-      dataPacket = json.dumps(dataJSON)
-      
-      #sends packet to UDP server and prints it in internal log
-      socket.sendto(bytes(str(dataPacket), "UTF-8"), ('<broadcast>', BROADCAST_TO_PORT))
-      print(str(dataPacket))
-      time.sleep(2)
+  #get data from sensor and bind to xyz
+  acceleration = sense.get_accelerometer_raw()
+  x = acceleration['x']
+  y = acceleration['y']
+  z = acceleration['z']
 
-#initialize object for class lcdManager
-threadLCD = lcdManager()
-#starts the object
-threadLCD.startThread()
-mainLoop()
+  #abs converts negative values to positive
+  x=abs(x)
+  y=abs(y)
+  z=abs(z)
+    
+  #get total acceleration
+  accel = math.sqrt(x**2 + y**2 + z**2)
+    
+  if accel > 3:
+    lcdShow = False
+    dataJSON = {
+      "id":0,
+      "speed":accel,
+      "dateTimeNow": str(datetime.datetime.now())
+    }
+    dataPacket = json.dumps(dataJSON)
+    socket.sendto(bytes(str(dataPacket), "UTF-8"), ('<broadcast>', BROADCAST_TO_PORT))
+    print(str(dataPacket))
+    time.sleep(3)
