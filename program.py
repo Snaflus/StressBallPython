@@ -61,10 +61,10 @@ class lcdManager():
   lcdShowBad = False
         
   def startThread(self):
-    threadLCD = threading.Thread(target=run)
+    threadLCD = threading.Thread(target=runLCD)
     threadLCD.start()
 
-def run():
+def runLCD():
   alternate = True
   while True:
     if threadLCD.lcdShowGood == True:
@@ -90,21 +90,71 @@ def run():
         alternate = True
       time.sleep(0.75)
 
+#create class with attribute to enable/support multi threading
+class accelManager():
+  accel = 0
+  throwing = False
+  flying = False
+  collision = False
+  
+  def startThread(self):
+    threadAccel = threading.Thread(target=runAccel)
+    threadAccel.start()
 
-def getAccel():
-  #get data from sensor and bind to xyz
-  acceleration = sense.get_accelerometer_raw()
-  x = acceleration['x']
-  y = acceleration['y']
-  z = acceleration['z']
+def runAccel():
+  deltaAccel = 0
+  lastAccel = 1
+  maxReached = 0
+  lastTime = 0
+  while True:
+    #get data from sensor and bind to xyz
+    acceleration = sense.get_accelerometer_raw()
+    x = acceleration['x']
+    y = acceleration['y']
+    z = acceleration['z']
 
-  #abs converts negative values to positive
-  x=abs(x)
-  y=abs(y)
-  z=abs(z)
+    #abs converts negative values to positive
+    x=abs(x)
+    y=abs(y)
+    z=abs(z)
     
-  #get total acceleration
-  return math.sqrt(x**2 + y**2 + z**2)
+    #get total acceleration
+    threadAccel.accel = math.sqrt(x**2 + y**2 + z**2)
+    deltaAccel = threadAccel.accel - lastAccel
+    if (deltaAccel > 2) and threadAccel.throwing == False:
+      threadAccel.throwing = True
+      threadAccel.flying = False
+      threadAccel.collision = False
+      maxReached = 0
+      print(threadAccel.accel)
+      #time.sleep(0.1) #reduces false positive collisions
+      #print("throwing")
+    if (deltaAccel < 0.5 and threadAccel.throwing == True) and maxReached < 10:
+      threadAccel.throwing = True
+      threadAccel.flying = True
+      threadAccel.collision = False
+      if time.time() > lastTime+1:
+        maxReached = maxReached+1
+        if maxReached >= 10:
+          maxReached = 2000
+          threadAccel.throwing = False
+          threadAccel.flying = False
+          threadAccel.collision = False
+          print("Ball stopped flying")
+        lastTime = time.time()
+      #print("flying")
+    if deltaAccel > 6 and threadAccel.flying == True:
+      threadAccel.throwing = False
+      threadAccel.flying = True
+      threadAccel.collision = True
+      #print("collision")
+      time.sleep(2)
+      threadAccel.flying = False
+      threadAccel.collision = False
+    
+
+    
+    lastAccel = threadAccel.accel
 
 def sendData(accel):
   threadLCD.lcdShowGood = True
@@ -128,32 +178,35 @@ def sendData(accel):
 
 def mainLoop():
   lastTime=0
+  debugPrintOnceThrow = True
   while True:
     threadLCD.lcdShowBad = False
-    accel = getAccel()
-    
-    if accel > 3:
-      maxReached=0
-      print("Throw registered")
-      time.sleep(3)
-      while maxReached < 10:
+    if threadAccel.throwing == True and threadAccel.flying == False:
+      if debugPrintOnceThrow == True:
+        print("Throw registered")
+        debugPrintOnceThrow = False
+        debugPrintOnce = True
+      
+    #time.sleep(3)
+    if threadAccel.flying == True and threadAccel.collision == False:
+      if debugPrintOnce == True:
         print("Ball flying")
-        accel = getAccel()
-        threadLCD.lcdShowBad = True
-        if accel > 3:
-          #use accel deltas
-          print("Data should send")
-          sendData(accel)
-          threadLCD.lcdShowBad = False
-          maxReached=2000 #kill while loop
-        if time.time() > lastTime+1:
-          maxReached = maxReached+1
-          lastTime = time.time()
+        debugPrintOnce = False
+        debugPrintOnceThrow = True
+      threadLCD.lcdShowBad = True
+    if threadAccel.collision == True:
+      #use accel deltas
+      print("Ball thrown, data sent")
+      sendData(threadAccel.accel)
+      threadLCD.lcdShowBad = False
       
 
 
 #initialize object for class lcdManager
 threadLCD = lcdManager()
+threadAccel = accelManager()
 #starts the object
 threadLCD.startThread()
+threadAccel.startThread()
+print("Code running")
 mainLoop()
